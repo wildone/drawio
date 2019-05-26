@@ -255,6 +255,11 @@
 	EditorUi.prototype.maxBackgroundBytes = 2500000;
 
 	/**
+	 * Maximum size for text files in labels is 0.5 MB.
+	 */
+	EditorUi.prototype.maxTextBytes = 500000;
+
+	/**
 	 * Holds the current file.
 	 */
 	EditorUi.prototype.currentFile = null;
@@ -428,9 +433,9 @@
 	/**
 	 * Returns true if no external comms allowed or possible
 	 */
-	EditorUi.prototype.isOffline = function()
+	EditorUi.prototype.isOffline = function(ignoreStealth)
 	{
-		return this.isOfflineApp() || !navigator.onLine || urlParams['stealth'] == '1';
+		return this.isOfflineApp() || !navigator.onLine || (!ignoreStealth && urlParams['stealth'] == '1');
 	};
 
 	/**
@@ -6629,9 +6634,14 @@
 					}
 				}
 			}
+			else
+			{
+				this.spinner.stop();
+				this.handleError({message: mxResources.get('serviceUnavailableOrBlocked')});
+			}
 		});
 		
-		if (!this.doImportVisio && !this.loadingExtensions && !this.isOffline())
+		if (!this.doImportVisio && !this.loadingExtensions && !this.isOffline(true))
 		{
 			this.loadingExtensions = true;
 			mxscript('js/extensions.min.js', delayed);
@@ -6668,9 +6678,14 @@
 					onerror(e);
 				}
 			}
+			else
+			{
+				this.spinner.stop();
+				this.handleError({message: mxResources.get('serviceUnavailableOrBlocked')});
+			}
 		});
 		
-		if (!this.doImportGraphML && !this.loadingExtensions && !this.isOffline())
+		if (!this.doImportGraphML && !this.loadingExtensions && !this.isOffline(true))
 		{
 			this.loadingExtensions = true;
 			mxscript('js/extensions.min.js', delayed);
@@ -6706,9 +6721,14 @@
 					this.handleError(e);
 				}
 			}
+			else
+			{
+				this.spinner.stop();
+				this.handleError({message: mxResources.get('serviceUnavailableOrBlocked')});
+			}
 		});
 		
-		if (typeof VsdxExport === 'undefined' && !this.loadingExtensions && !this.isOffline())
+		if (typeof VsdxExport === 'undefined' && !this.loadingExtensions && !this.isOffline(true))
 		{
 			this.loadingExtensions = true;
 			mxscript('js/extensions.min.js', delayed);
@@ -6749,7 +6769,7 @@
 		});
 		
 		if (typeof window.LucidImporter === 'undefined' &&
-			!this.loadingExtensions && !this.isOffline())
+			!this.loadingExtensions && !this.isOffline(true))
 		{
 			this.loadingExtensions = true;
 			
@@ -6951,6 +6971,14 @@
 				    		{
 				    			text = mxUtils.htmlEntities(text);
 				    		}
+
+				    		//TODO Refuse unsupported file types early as at this stage a lot of processing has beed done and time is wasted. 
+				    		//		For example, 5 MB PDF files is processed and then only 0.5 MB of meaningless text is added!
+				    		//Limit labels to maxTextBytes
+				    		if (text.length > this.maxTextBytes)
+			    			{
+				    			text = text.substring(0, this.maxTextBytes) + '...';
+			    			}
 				    		
 							// Apply value and updates the cell size to fit the text block
 							cell.value = text;
@@ -7044,19 +7072,28 @@
 		if (device && Graph.fileSupport && ((!mxClient.IS_IE && !mxClient.IS_IE11) ||
 			navigator.appVersion.indexOf('Windows NT 6.1') < 0))
 		{
-			var input = document.createElement('input');
-			input.setAttribute('type', 'file');
-			
-			mxEvent.addListener(input, 'change', mxUtils.bind(this, function()
+			if (this.importFileInputElt == null) 
 			{
-				if (input.files != null)
+				var input = document.createElement('input');
+				input.setAttribute('type', 'file');
+				
+				mxEvent.addListener(input, 'change', mxUtils.bind(this, function()
 				{
-					// Using null for position will disable crop of input file
-					this.importFiles(input.files, null, null, this.maxImageSize);
-				}
-			}));
-
-			input.click();
+					if (input.files != null)
+					{
+						// Using null for position will disable crop of input file
+						this.importFiles(input.files, null, null, this.maxImageSize);
+					}
+					
+					input.value = '';
+				}));
+				
+				input.style.display = 'none';
+				document.body.appendChild(input);
+				this.importFileInputElt = input;
+			}
+			
+			this.importFileInputElt.click();
 		}
 		else
 		{
@@ -10595,29 +10632,15 @@
 			div.style.paddingBottom = '2px';
 
 			var button = document.createElement('button');
-			mxUtils.write(button, mxResources.get('save'));
-			button.setAttribute('title', mxResources.get('save') + ' (' + Editor.ctrlKey + '+S)');
 			button.className = 'geBigButton';
 			button.style.fontSize = '12px';
 			button.style.padding = '4px 6px 4px 6px';
 			button.style.borderRadius = '3px';
 			
-			mxEvent.addListener(button, 'click', mxUtils.bind(this, function()
+			if (urlParams['noSaveBtn'] == '1')
 			{
-				this.actions.get('save').funct();
-			}));
-			
-			div.appendChild(button);
-			
-			if (urlParams['saveAndExit'] == '1')
-			{
-				button = document.createElement('a');
 				mxUtils.write(button, mxResources.get('saveAndExit'));
 				button.setAttribute('title', mxResources.get('saveAndExit'));
-				button.style.fontSize = '12px';
-				button.style.marginLeft = '6px';
-				button.style.padding = '4px';
-				button.style.cursor = 'pointer';
 				
 				mxEvent.addListener(button, 'click', mxUtils.bind(this, function()
 				{
@@ -10625,6 +10648,36 @@
 				}));
 				
 				div.appendChild(button);
+			}
+			else
+			{
+				mxUtils.write(button, mxResources.get('save'));
+				button.setAttribute('title', mxResources.get('save') + ' (' + Editor.ctrlKey + '+S)');
+				
+				mxEvent.addListener(button, 'click', mxUtils.bind(this, function()
+				{
+					this.actions.get('save').funct();
+				}));
+				
+				div.appendChild(button);
+				
+				if (urlParams['saveAndExit'] == '1')
+				{
+					button = document.createElement('a');
+					mxUtils.write(button, mxResources.get('saveAndExit'));
+					button.setAttribute('title', mxResources.get('saveAndExit'));
+					button.style.fontSize = '12px';
+					button.style.marginLeft = '6px';
+					button.style.padding = '4px';
+					button.style.cursor = 'pointer';
+					
+					mxEvent.addListener(button, 'click', mxUtils.bind(this, function()
+					{
+						this.actions.get('saveAndExit').funct();
+					}));
+					
+					div.appendChild(button);
+				}
 			}
 
 			button = document.createElement('a');
@@ -12241,6 +12294,47 @@
 		{
 			return new DrawioComment(this, null, content, Date.now(), Date.now(), false, user);
 		}
+	};
+	
+	//==================================================== End of comments =================================================================
+	
+	/**
+	 * Does revisions history available
+	 */
+	EditorUi.prototype.isRevisionHistorySupported = function()
+	{
+		var file = this.getCurrentFile();
+		
+		return file != null && file.isRevisionHistorySupported();
+	};
+
+	/**
+	 * Get revisions of current file
+	 */
+	EditorUi.prototype.getRevisions = function(success, error)
+	{
+		var file = this.getCurrentFile();
+		
+		if (file != null && file.getRevisions)
+		{
+			file.getRevisions(success, error);
+		}
+		else
+		{
+			error({message: mxResources.get('unknownError')});
+		}
+	};
+	
+	/**
+	 * Is revisions history enabled
+	 */
+	EditorUi.prototype.isRevisionHistoryEnabled = function()
+	{
+		var file = this.getCurrentFile();
+		
+		return file != null &&
+				((file.constructor == DriveFile && file.isEditable()) ||
+				file.constructor == DropboxFile);
 	};
 })();
 

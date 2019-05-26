@@ -579,6 +579,10 @@ var com;
                         this.importPage(backPage, graph, graph.getDefaultParent());
                     }
                 	
+                	//TODO KNOWN ISSUE: VSDX layers are virtual grouping where parts of a group can be members of a layers while the remaining group members belong to another layer
+                	//					This cannot be done in draw.io currently
+                	//					Also, layers should NOT affect cells order. So, as a best effort solution, layers should be orders such that the cells order is maintained
+                	
                 	//add page layers
                 	var layers = page.getLayers();
                 	this.layersMap[0] = graph.getDefaultParent();
@@ -2499,6 +2503,14 @@ var com;
                         return parsedGeom.str;
                     };
                     /*private*/ mxVsdxGeometryList.prototype.processGeo = function (shape, p, parsedGeom, lastGeoStyle, withFill) {
+                    	var rounding = shape.getRounding();
+                    	var roundingStr = '';
+                        
+                        if (rounding > 0)
+                    	{
+                        	roundingStr = ' rounded="1" arcSize="' + (rounding * com.mxgraph.io.vsdx.mxVsdxUtils.conversionFactor) + '" ';
+                    	}
+                        
                         var _loop_2 = function (index130) {
                             var geo = this_2.geomList[index130];
                             {
@@ -2508,12 +2520,12 @@ var com;
                                 if (!(str_1.length === 0)) {
                                     var geoStyle = this_2.getGeoStyle(geo);
                                     if (lastGeoStyle === -1) {
-                                        /* append */ (function (sb) { return sb.str = sb.str.concat("<path>"); })(parsedGeom);
+                                        /* append */ (function (sb) { return sb.str = sb.str.concat("<path" + roundingStr + ">"); })(parsedGeom);
                                         /* append */ (function (sb) { return sb.str = sb.str.concat(str_1); })(parsedGeom);
                                     }
                                     else if (lastGeoStyle !== geoStyle) {
                                         this_2.closePath(parsedGeom, lastGeoStyle);
-                                        /* append */ (function (sb) { return sb.str = sb.str.concat("<path>"); })(parsedGeom);
+                                        /* append */ (function (sb) { return sb.str = sb.str.concat("<path" + roundingStr + ">"); })(parsedGeom);
                                         /* append */ (function (sb) { return sb.str = sb.str.concat(str_1); })(parsedGeom);
                                     }
                                     else {
@@ -4082,8 +4094,28 @@ var com;
                             }
                         }
                         var styleVariation = quickStyleVals.getQuickStyleVariation();
-                        if (retColor != null && (styleVariation & 8) > 0) {
-                            retColor = this.getLineColor$com_mxgraph_io_vsdx_theme_QuickStyleVals(quickStyleVals);
+                        
+                        //TODO This is the best efforts of interpreting the documentation and also this article https://visualsignals.typepad.co.uk/vislog/2013/05/visio-2013-themes-in-the-shapesheet-part-2.html
+                        if (retColor != null && (styleVariation & 8) > 0) 
+                        {
+                        	var bkgHSLClr = this.getStyleColor(8).toHsl();
+                        	var lineClr = this.getLineColor$com_mxgraph_io_vsdx_theme_QuickStyleVals(quickStyleVals);
+                        	var lineHSLClr = lineClr.toHsl();
+                            var fillHSLClr = retColor.toHsl();
+                            
+                            
+                            if (Math.abs(bkgHSLClr.getLum() - fillHSLClr.getLum()) >= 0.1666) 
+                            {
+                            	//nothing
+                            }
+                            else if (bkgHSLClr.getLum() <= 0.7292) 
+                            {
+                            	retColor = new com.mxgraph.io.vsdx.theme.Color(255, 255, 255);
+                            }
+                            else if (Math.abs(bkgHSLClr.getLum() - lineHSLClr.getLum()) > Math.abs(bkgHSLClr.getLum() - fillHSLClr.getLum()))
+                        	{
+                            	retColor = lineClr;
+                        	}
                         }
                         return retColor;
                     };
@@ -4161,8 +4193,27 @@ var com;
                             lineClr = this.getStyleColor(lineColorStyle);
                         }
                         var styleVariation = quickStyleVals.getQuickStyleVariation();
-                        if ((styleVariation & 4) > 0) {
-                            lineClr = this.getFillColor$com_mxgraph_io_vsdx_theme_QuickStyleVals(quickStyleVals);
+                        
+                        //TODO This is the best efforts of interpreting the documentation and also this article https://visualsignals.typepad.co.uk/vislog/2013/05/visio-2013-themes-in-the-shapesheet-part-2.html
+                        if ((styleVariation & 4) > 0) 
+                        {
+                        	var bkgHSLClr = this.getStyleColor(8).toHsl();
+                        	var fillColor = this.getFillColor$com_mxgraph_io_vsdx_theme_QuickStyleVals(quickStyleVals);
+                            var fillHSLClr = fillColor.toHsl();
+                            var lineHSLClr = lineClr.toHsl();
+                            
+                            if (Math.abs(bkgHSLClr.getLum() - lineHSLClr.getLum()) >= 0.1666) 
+                            {
+                            	//nothing
+                            }
+                            else if (bkgHSLClr.getLum() <= 0.7292) 
+                            {
+                            	lineClr = new com.mxgraph.io.vsdx.theme.Color(255, 255, 255);
+                            }
+                            else if (Math.abs(bkgHSLClr.getLum() - fillHSLClr.getLum()) > Math.abs(bkgHSLClr.getLum() - lineHSLClr.getLum()))
+                        	{
+                            	lineClr = fillColor;
+                        	}
                         }
                         return lineClr;
                     };
@@ -4295,18 +4346,43 @@ var com;
                             txtColor = this.getStyleColor(fontColorStyle);
                         }
                         var styleVariation = quickStyleVals.getQuickStyleVariation();
-                        if ((styleVariation & 2) > 0) {
-                            var fillColor = this.getFillColor$com_mxgraph_io_vsdx_theme_QuickStyleVals(quickStyleVals);
+                        
+                        //TODO This is the best efforts of interpreting the documentation and also this article https://visualsignals.typepad.co.uk/vislog/2013/05/visio-2013-themes-in-the-shapesheet-part-2.html
+                        if ((styleVariation & 2) > 0) 
+                        {
+                        	var bkgHSLClr = this.getStyleColor(8).toHsl();
+                        	var txtHSLClr = txtColor.toHsl();
+                        	var fillColor = this.getFillColor$com_mxgraph_io_vsdx_theme_QuickStyleVals(quickStyleVals);
                             var fillHSLClr = fillColor.toHsl();
                             var lineClr = this.getLineColor$com_mxgraph_io_vsdx_theme_QuickStyleVals(quickStyleVals);
                             var lineHSLClr = lineClr.toHsl();
-                            if (fillHSLClr.getLum() < lineHSLClr.getLum()) {
-                                txtColor = fillColor;
+                            
+                            if (Math.abs(bkgHSLClr.getLum() - txtHSLClr.getLum()) >= 0.1666) 
+                            {
+                            	//nothing
                             }
-                            else {
-                                txtColor = lineClr;
+                            else if (bkgHSLClr.getLum() <= 0.7292) 
+                            {
+                            	txtColor = new com.mxgraph.io.vsdx.theme.Color(255, 255, 255);
                             }
+                            else
+                        	{
+                            	var lineDiff = Math.abs(bkgHSLClr.getLum() - lineHSLClr.getLum());
+                            	var fillDiff = Math.abs(bkgHSLClr.getLum() - fillHSLClr.getLum());
+                            	var txtDiff = Math.abs(bkgHSLClr.getLum() - txtHSLClr.getLum());
+                            	var max = Math.max(lineDiff, fillDiff, txtDiff);
+                            	
+                            	if (max == lineDiff)
+                        		{
+                            		txtColor = lineClr;
+                        		}
+                            	else if (max == fillDiff)
+                        		{
+                            		txtColor = fillColor;
+                        		}
+                        	}
                         }
+                        
                         return txtColor;
                     };
                     mxVsdxTheme.prototype.getFontColor = function (quickStyleVals, fontColors) {
@@ -8748,60 +8824,29 @@ var com;
                     Shape.prototype.hasGeomList = function () {
                         return this.geomList != null && this.geomList.hasGeom();
                     };
+                    
                     /**
-                     * Transform plain text into a HTML list if the Para element referenced by
-                     * pp indicates it.
-                     * @param {string} text Text to be transformed.
-                     * @param {string} pp Reference to a Para element.
-                     * @return {string} Text like a HTML list.
+                     * Check if the paragraph is a list and return the list with its style
+                     * @param {string} pp Reference to a Para element
+                     * @return {string} the opening tag of the list with style or null if no list is found
                      */
-                    Shape.prototype.textToList = function (text, pp) {
-                        if (!(function (o1, o2) { if (o1 && o1.equals) {
-                            return o1.equals(o2);
-                        }
-                        else {
-                            return o1 === o2;
-                        } })(pp, "")) {
+                    Shape.prototype.getPPList = function (pp) 
+                    {
+                    	var ul = null;
+                    	
+                        if (pp != '') 
+                        {
                             var bullet = this.getBullet(pp);
-                            if (!(function (o1, o2) { if (o1 && o1.equals) {
-                                return o1.equals(o2);
-                            }
-                            else {
-                                return o1 === o2;
-                            } })(bullet, "0")) {
-                                var entries = text.split("\n");
-                                
-                                if (!entries[entries.length - 1]) 
-                                {
-                                	entries.pop();
-                                }
-                                
-                                var ret = "";
-                                for (var index159 = 0; index159 < entries.length; index159++) {
-                                    var entry = entries[index159];
-                                    {
-                                        ret += com.mxgraph.io.vsdx.mxVsdxUtils.surroundByTags(entry, "li");
-                                    }
-                                }
-                                ret = com.mxgraph.io.vsdx.mxVsdxUtils.surroundByTags(ret, "ul");
-                                var styleMap = ({});
-                                if ((function (o1, o2) { if (o1 && o1.equals) {
-                                    return o1.equals(o2);
-                                }
-                                else {
-                                    return o1 === o2;
-                                } })(bullet, "4")) {
-                                    /* put */ (styleMap["list-style-type"] = "square");
-                                }
-                                else {
-                                    /* put */ (styleMap["list-style-type"] = "disc");
-                                }
-                                ret = this.insertAttributes(ret, styleMap);
-                                return ret;
+                            
+                            if (bullet != '0') 
+                            {
+                            	ul = '<ul style="margin: 0;list-style-type: ' + (bullet == '4'? 'square' : 'disc') + '">';
                             }
                         }
-                        return text;
+                        
+                        return ul;
                     };
+                    
                     /**
                      * Returns the paragraph formated according the properties in the last
                      * Para element referenced.
@@ -9779,8 +9824,41 @@ var com;
                      * @param {*} txtChildren
                      */
                     VsdxShape.prototype.getHtmlTextContent = function (txtChildren) {
-                        var ret = "";
+                    	var ret = "";
                         var first = true;
+                        var ulMode = false;
+                        var ulModeFirst = false; 
+                        
+                    	function processLblTxt(text) 
+                        {
+                            text = com.mxgraph.io.vsdx.mxVsdxUtils.htmlEntities(text);
+                            
+                            if (ulModeFirst)
+                        	{
+                            	text = '<li>' + text;
+                            	ulModeFirst = false;
+                        	}
+                            
+                            if (ulMode)
+                        	{
+                        		var entries = text.split('\n');
+                                
+                                if (!entries[entries.length - 1]) 
+                                {
+                                	entries.pop();
+                                	ulModeFirst = true; 
+                                }
+                                
+                                text = entries.join('</li><li>');
+                        	}
+                            else
+                        	{
+                            	text = text.replace(new RegExp('\n', 'g'), '<br/>').replace(new RegExp(com.mxgraph.io.vsdx.Shape.UNICODE_LINE_SEP, 'g'), '<br/>');
+                        	}
+                            
+                            return this.getTextCharFormated(text);
+                        };
+
                         if (txtChildren != null && txtChildren.length > 0) {
                             for (var index = 0; index < txtChildren.length; index++) {
                                 var node = txtChildren.item(index);
@@ -9807,17 +9885,34 @@ var com;
                                 }
                                 else {
                                     return o1 === o2;
-                                } })(node.nodeName, "pp")) {
+                                } })(node.nodeName, "pp")) 
+                                {
                                     var elem = node;
                                     this.pp = this.getIndex(elem);
-                                    if (first) {
+
+                                    if (ulMode)
+                                	{
+                                    	//TODO closing li is wrongly placed after font (and other tags (e.g, b, i))
+                                    	ret += '</li></ul>';
+                                	}
+                                    
+                                    if (first) 
+                                    {
                                         first = false;
                                     }
-                                    else {
+                                    else 
+                                    {
                                         ret += "</p>";
                                     }
+                                    
                                     var para = "<p>";
                                     ret += this.getTextParagraphFormated(para);
+                                    
+                                    var ul = this.getPPList(this.pp);
+                                    
+                                    ulMode = ul != null;
+                                    ulModeFirst = ulMode; 
+                                    ret += ulMode? ul : '';
                                 }
                                 else if ((function (o1, o2) { if (o1 && o1.equals) {
                                     return o1.equals(o2);
@@ -9835,7 +9930,7 @@ var com;
                                         text = (function (m, k) { return m[k] ? m[k] : null; })(this.masterShape.fields, this.fld);
                                     }
                                     if (text != null)
-                                        ret += this.processLblTxt(text);
+                                        ret += processLblTxt.call(this, text);
                                 }
                                 else if ((function (o1, o2) { if (o1 && o1.equals) {
                                     return o1.equals(o2);
@@ -9844,22 +9939,23 @@ var com;
                                     return o1 === o2;
                                 } })(node.nodeName, "#text")) {
                                     var text = node.textContent;
-                                    ret += this.processLblTxt(text);
+                                    ret += processLblTxt.call(this, text);
                                 }
                             }
-                            ;
                         }
+                        
+                        if (ulMode)
+                    	{
+                        	//TODO closing li is wrongly placed after font (and other tags (e.g, b, i))
+                        	ret += '</li></ul>';
+                    	}
+                        
                         var end = first ? "" : "</p>";
                         ret += end;
                         com.mxgraph.io.vsdx.mxVsdxUtils.surroundByTags(ret, "div");
                         return ret;
                     };
-                    /*private*/ VsdxShape.prototype.processLblTxt = function (text) {
-                        text = com.mxgraph.io.vsdx.mxVsdxUtils.htmlEntities(text);
-                        text = this.textToList(text, this.pp);
-                        text = text.replace(new RegExp("\n", 'g'), "<br/>").replace(new RegExp(com.mxgraph.io.vsdx.Shape.UNICODE_LINE_SEP_$LI$(), 'g'), "<br/>");
-                        return this.getTextCharFormated(text);
-                    };
+                    
                     /**
                      * Checks if a nameU is for big connectors.
                      * @param {string} nameU NameU attribute.
@@ -10473,7 +10569,7 @@ var com;
                      * The property may to be defined in master shape or line stylesheet.<br/>
                      * @return {boolean} Returns <code>true</code> if the cell is Rounded.
                      */
-                    VsdxShape.prototype.isRounded = function () {
+                    VsdxShape.prototype.getRounding = function () {
                         var val = this.getValue(this.getCellElement$java_lang_String(com.mxgraph.io.vsdx.mxVsdxConstants.ROUNDING), "0");
                         if ((function (o1, o2) { if (o1 && o1.equals) {
                             return o1.equals(o2);
@@ -10483,7 +10579,7 @@ var com;
                         } })("Themed", val)) {
                             val = "0";
                         }
-                        return parseFloat(val) > 0;
+                        return parseFloat(val);
                     };
                     /**
                      * Return if the line has shadow.<br/>
@@ -11038,7 +11134,26 @@ var com;
                         }
                         return false;
                     };
-                    VsdxShape.prototype.isRotatedLabel = function () {
+                    
+                    VsdxShape.prototype.isVerticalLabel = function ()
+                    {
+                    	var txtDir = this.getAttribute('TextDirection', 'V', '');
+                    	
+                    	if (!txtDir && this.masterShape != null)
+                		{
+                    		txtDir = this.masterShape.getAttribute('TextDirection', 'V', '');
+                		}
+                    	
+                    	return txtDir == '1';
+                    };
+                    
+                    VsdxShape.prototype.isRotatedLabel = function () 
+                    {
+                    	if (this.isVerticalLabel()) 
+                    	{
+                    		return true;
+                    	}
+                    		
                         var txtAngleValue = this.getAttribute(com.mxgraph.io.vsdx.mxVsdxConstants.TXT_ANGLE, "V", "");
                         if (this.masterShape != null) {
                             if ((function (o1, o2) { if (o1 && o1.equals) {
@@ -11273,7 +11388,7 @@ var com;
                         } })(lbkgnd, "")) {
                             /* put */ (this.styleMap[mxConstants.STYLE_LABEL_BACKGROUNDCOLOR] = lbkgnd);
                         }
-                        /* put */ (this.styleMap[mxConstants.STYLE_ROUNDED] = this.isRounded() ? com.mxgraph.io.vsdx.mxVsdxConstants.TRUE : com.mxgraph.io.vsdx.mxVsdxConstants.FALSE);
+                        /* put */ (this.styleMap[mxConstants.STYLE_ROUNDED] = this.getRounding() > 0 ? com.mxgraph.io.vsdx.mxVsdxConstants.TRUE : com.mxgraph.io.vsdx.mxVsdxConstants.FALSE);
                         return this.styleMap;
                     };
                     /**
@@ -11371,6 +11486,13 @@ var com;
                                 (styleMap["whiteSpace"] = "wrap");
                             /* remove */ delete styleMap["shape"];
                             /* remove */ delete styleMap["image"];
+                            
+                            if (this.isVerticalLabel())
+                        	{
+                            	txtAngleV += Math.PI + 0.01; //TODO Added 0.01 since we don't override the parent rotation if labRot is zero. Why?
+                            	styleMap['horizontal'] = '0';
+                        	}
+                            
                             var rotation = this.getRotation();
                             if (txtAngleV !== 0) {
                                 var labRot = 360 - (function (x) { return x * 180 / Math.PI; })(txtAngleV);
